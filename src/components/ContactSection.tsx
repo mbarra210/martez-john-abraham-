@@ -14,17 +14,17 @@ const contactInfo = [
   {
     icon: MapPin,
     title: 'Office Location',
-    details: ['123 Legal Plaza, Suite 500', 'New York, NY 10001']
+    details: ['190-17 Union Turnpike, Fresh Meadows', 'NY 11366, United States']
   },
   {
     icon: Phone,
     title: 'Phone',
-    details: ['(304) 303-9843', '24/7 Emergency Line']
+    details: ['+1 (419) 607-7952', '24/7 Emergency Line']
   },
   {
     icon: Mail,
     title: 'Email',
-    details: ['rofilate007@gmail.com', 'Quick Response Guaranteed']
+    details: ['martezjohnabraham@gmail.com', 'Quick Response Guaranteed']
   },
   {
     icon: Clock,
