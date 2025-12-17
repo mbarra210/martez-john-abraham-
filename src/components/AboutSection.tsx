@@ -24,7 +24,7 @@ const AboutSection = () => {
         <div className="grid lg:grid-cols-1 gap-12 items-center">
           <div className="max-w-6xl mx-auto">
             <div className="grid md:grid-cols-2 gap-12 items-center">
-              <div className="relative h-[350px] md:h-[500px]">
+              <div className="relative h-[400px] sm:h-[350px] md:h-[500px]">
                 <Image
                   src="https://i.imgur.com/Sr0VR0K.jpeg"
                   alt="M. John Abraham , Attorney"
