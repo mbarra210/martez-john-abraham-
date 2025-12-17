@@ -19,10 +19,7 @@ export async function POST(request: Request) {
 
     // Validate required fields
     if (!body.name || !body.email || !body.phone || !body.caseType) {
-      return NextResponse.json(
-        { message: 'Missing required fields' },
-        { status: 400 }
-      );
+      return NextResponse.json({ message: 'Missing required fields' }, { status: 400 });
     }
 
     // Format case type for display
@@ -33,7 +30,9 @@ export async function POST(request: Request) {
         family: 'Family Law',
         business: 'Business Law',
         estate: 'Estate Planning',
-        other: 'Other',
+        load: 'Loan',
+        investment: 'Investment',
+        other: 'Other'
       };
       return types[type] || type;
     };
@@ -42,7 +41,7 @@ export async function POST(request: Request) {
     const response = await fetch(GOOGLE_SCRIPT_URL, {
       method: 'POST',
       headers: {
-        'Content-Type': 'application/json',
+        'Content-Type': 'application/json'
       },
       body: JSON.stringify({
         name: body.name,
@@ -52,7 +51,7 @@ export async function POST(request: Request) {
         description: body.description,
         preferredDate: body.preferredDate,
         preferredTime: body.preferredTime
-      }),
+      })
     });
 
     // Check if the Google Script request was successful
@@ -66,13 +65,12 @@ export async function POST(request: Request) {
       message: 'Consultation request sent successfully',
       data: result
     });
-
   } catch (error) {
     console.error('Error sending consultation request:', error);
     return NextResponse.json(
       {
         message: 'Failed to send consultation request',
-        error: error instanceof Error ? error.message : 'Unknown error',
+        error: error instanceof Error ? error.message : 'Unknown error'
       },
       { status: 500 }
     );

@@ -1,5 +1,6 @@
 import { Separator } from "@/components/ui/separator";
-import { MapPin, Phone, Mail } from "lucide-react";
+import { MapPin, Mail } from "lucide-react";
+import { FaWhatsapp } from "react-icons/fa";
 import Link from "next/link";
 
 const Footer = () => {
@@ -24,15 +25,15 @@ const Footer = () => {
             <div className="space-y-3 flex flex-col items-center justify-center">
               <div className="flex items-center space-x-3">
                 <MapPin className="w-5 h-5 text-[#d4af37] flex-shrink-0" />
-                <span className="text-gray-300">123 Legal Plaza, Suite 500, New York, NY 10001</span>
+                <span className="text-gray-300">190-17 Union Turnpike, Fresh Meadows, NY 11366, United States</span>
               </div>
               <div className="flex items-center space-x-3">
-                <Phone className="w-5 h-5 text-[#d4af37] flex-shrink-0" />
-                <span className="text-gray-300">(304) 303-9843</span>
+                <FaWhatsapp size={24} color="#25D366" />
+                <span className="text-gray-300">+1 (419) 607-7952</span>
               </div>
               <div className="flex items-center space-x-3">
                 <Mail className="w-5 h-5 text-[#d4af37] flex-shrink-0" />
-                <span className="text-gray-300">rofilate007@gmail.com</span>
+                <span className="text-gray-300">martezjohnabraham@gmail.com</span>
               </div>
             </div>
           </div>

@@ -8,6 +8,7 @@ import { Label } from '@/components/ui/label';
 import { MapPin, Phone, Mail, Clock } from 'lucide-react';
 import { toast } from 'sonner';
 import { useState } from 'react';
+import { z } from 'zod';
 
 const contactInfo = [
   {
@@ -32,8 +33,20 @@ const contactInfo = [
   }
 ];
 
+// Validation schema
+const contactSchema = z.object({
+  firstName: z.string().min(2, 'First name must be at least 2 characters').max(50, 'First name must be less than 50 characters'),
+  lastName: z.string().min(2, 'Last name must be at least 2 characters').max(50, 'Last name must be less than 50 characters'),
+  email: z.string().email('Please enter a valid email address'),
+  phone: z.string().regex(/^[\d\s\-\+\(\)]{10,}$/, 'Please enter a valid phone number').optional().or(z.literal('')),
+  subject: z.string().min(5, 'Subject must be at least 5 characters').max(100, 'Subject must be less than 100 characters'),
+  message: z.string().min(10, 'Message must be at least 10 characters').max(2000, 'Message must be less than 2000 characters')
+});
+
 const ContactSection = () => {
-  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
+
+  const whatsappNumber = process.env.NEXT_PUBLIC_WHATSAPP_NO!; // Replace with your WhatsApp number
 
   const [formData, setFormData] = useState({
     firstName: '',
@@ -44,47 +57,31 @@ const ContactSection = () => {
     message: ''
   });
 
-  const handleSubmit = async (e: React.FormEvent) => {
+  const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    setIsSubmitting(true);
-
-    const { firstName, lastName, email, phone, subject, message } = formData;
-
-    if (!firstName || !lastName || !email || !subject || !message) {
-      toast.error('Please fill in all required fields');
-      setIsSubmitting(false);
-      return;
-    }
+    setFieldErrors({});
 
     try {
-      const fullMessage = {
-        name: `${firstName} ${lastName}`,
-        email,
-        phone,
-        subject,
-        message
-      };
+      const validated = contactSchema.parse(formData);
 
-      const response = await fetch('/api/send-contact-message', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify(fullMessage)
-      });
+      // Create WhatsApp message
+      const message = `*New Contact Message*
 
-      if (!response.ok) {
-        throw new Error('Failed to send message');
-      }
+*Name:* ${validated.firstName} ${validated.lastName}
+*Email:* ${validated.email}
+*Phone:* ${validated.phone || 'N/A'}
+*Subject:* ${validated.subject}
+*Message:* ${validated.message}`;
 
-      const responseData = await response.json();
-      if (!response.ok) {
-        console.error('API Error Response:', responseData); // Log detailed error
-        throw new Error(responseData.message || 'Failed to send consultation request');
-      }
+      // Encode message for URL
+      const encodedMessage = encodeURIComponent(message);
+      const whatsappUrl = `https://wa.me/${whatsappNumber.replace(/\D/g, '')}?text=${encodedMessage}`;
 
-      toast.success('Message Sent', {
-        description: <span style={{ color: 'black' }}>Thank you for reaching out. We&apos;ll get back to you soon.</span>
+      // Open WhatsApp
+      window.open(whatsappUrl, '_blank');
+
+      toast.success('Opening WhatsApp', {
+        description: <span style={{ color: 'black' }}>Your message is ready to send.</span>
       });
 
       // Reset form
@@ -97,15 +94,27 @@ const ContactSection = () => {
         message: ''
       });
     } catch (error) {
-      console.error('Error sending message:', error);
-      toast.error(error instanceof Error ? error.message : 'Failed to submit contact message. Please try again later.');
-    } finally {
-      setIsSubmitting(false);
+      if (error instanceof z.ZodError) {
+        // Handle validation errors
+        const errors: Record<string, string> = {};
+        error.issues.forEach(issue => {
+          const path = issue.path[0];
+          if (path) {
+            errors[path as string] = issue.message;
+          }
+        });
+        setFieldErrors(errors);
+        toast.error('Please fix the errors in the form');
+      }
     }
   };
 
   const handleInputChange = (field: string, value: string) => {
     setFormData(prev => ({ ...prev, [field]: value }));
+    // Clear error for this field when user starts typing
+    if (fieldErrors[field]) {
+      setFieldErrors(prev => ({ ...prev, [field]: '' }));
+    }
   };
 
   return (
@@ -156,23 +165,49 @@ const ContactSection = () => {
                       onChange={e => handleInputChange('firstName', e.target.value)}
                       placeholder="Enter your first name"
                       required
-                      disabled={isSubmitting}
+                      className={fieldErrors.firstName ? 'border-red-500' : ''}
                     />
+                    {fieldErrors.firstName && <p className="text-sm text-red-500">{fieldErrors.firstName}</p>}
                   </div>
                   <div className="space-y-2">
                     <Label htmlFor="lastName">Last Name *</Label>
-                    <Input id="lastName" value={formData.lastName} onChange={e => handleInputChange('lastName', e.target.value)} placeholder="Enter your last name" required disabled={isSubmitting} />
+                    <Input
+                      id="lastName"
+                      value={formData.lastName}
+                      onChange={e => handleInputChange('lastName', e.target.value)}
+                      placeholder="Enter your last name"
+                      required
+                      className={fieldErrors.lastName ? 'border-red-500' : ''}
+                    />
+                    {fieldErrors.lastName && <p className="text-sm text-red-500">{fieldErrors.lastName}</p>}
                   </div>
                 </div>
 
                 <div className="grid md:grid-cols-2 gap-4">
                   <div className="space-y-2">
                     <Label htmlFor="email">Email *</Label>
-                    <Input id="email" type="email" value={formData.email} onChange={e => handleInputChange('email', e.target.value)} placeholder="Enter your email" required disabled={isSubmitting} />
+                    <Input
+                      id="email"
+                      type="email"
+                      value={formData.email}
+                      onChange={e => handleInputChange('email', e.target.value)}
+                      placeholder="Enter your email"
+                      required
+                      className={fieldErrors.email ? 'border-red-500' : ''}
+                    />
+                    {fieldErrors.email && <p className="text-sm text-red-500">{fieldErrors.email}</p>}
                   </div>
                   <div className="space-y-2">
                     <Label htmlFor="phone">Phone</Label>
-                    <Input type="tel" id="phone" value={formData.phone} onChange={e => handleInputChange('phone', e.target.value)} placeholder="Enter your phone number" disabled={isSubmitting} />
+                    <Input
+                      type="tel"
+                      id="phone"
+                      value={formData.phone}
+                      onChange={e => handleInputChange('phone', e.target.value)}
+                      placeholder="Enter your phone number"
+                      className={fieldErrors.phone ? 'border-red-500' : ''}
+                    />
+                    {fieldErrors.phone && <p className="text-sm text-red-500">{fieldErrors.phone}</p>}
                   </div>
                 </div>
 
@@ -184,8 +219,9 @@ const ContactSection = () => {
                     onChange={e => handleInputChange('subject', e.target.value)}
                     placeholder="Brief description of your legal matter"
                     required
-                    disabled={isSubmitting}
+                    className={fieldErrors.subject ? 'border-red-500' : ''}
                   />
+                  {fieldErrors.subject && <p className="text-sm text-red-500">{fieldErrors.subject}</p>}
                 </div>
 
                 <div className="space-y-2">
@@ -195,14 +231,14 @@ const ContactSection = () => {
                     value={formData.message}
                     onChange={e => handleInputChange('message', e.target.value)}
                     placeholder="Please provide details about your legal needs..."
-                    className="min-h-[120px]"
+                    className={`min-h-[120px] ${fieldErrors.message ? 'border-red-500' : ''}`}
                     required
-                    disabled={isSubmitting}
                   />
+                  {fieldErrors.message && <p className="text-sm text-red-500">{fieldErrors.message}</p>}
                 </div>
 
-                <Button variant="professional" size="lg" className="w-full" type="submit" disabled={isSubmitting}>
-                  {isSubmitting ? 'Sending...' : 'Send Message'}
+                <Button variant="professional" size="lg" className="w-full" type="submit">
+                  Send via WhatsApp
                 </Button>
 
                 <p className="text-sm text-muted-foreground text-center">All communications are confidential and protected by attorney-client privilege.</p>

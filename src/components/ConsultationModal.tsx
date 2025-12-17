@@ -11,17 +11,39 @@ import { toast } from 'sonner';
 import { Calendar as CalenderIcon, ChevronDownIcon, Phone, Mail, User, X } from 'lucide-react';
 import { Calendar } from '@/components/ui/calendar';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { z } from 'zod';
 
 interface ConsultationModalProps {
   children: React.ReactNode;
 }
+
+// Validation schema
+const consultationSchema = z.object({
+  name: z.string().min(2, 'Name must be at least 2 characters').max(100, 'Name must be less than 100 characters'),
+  email: z.string().email('Please enter a valid email address'),
+  phone: z.string().regex(/^[\d\s\-\+\(\)]{10,}$/, 'Please enter a valid phone number'),
+  caseType: z.enum(['criminal', 'personal-injury', 'family', 'business', 'estate', 'load', 'investment']),
+  description: z.string().max(1000, 'Description must be less than 1000 characters').optional(),
+  preferredDate: z
+    .date()
+    .refine(date => {
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+      return date > today;
+    }, 'Please select a future date')
+    .optional(),
+  preferredTime: z.string().regex(/^\d{2}:\d{2}$/, 'Please enter a valid time')
+});
 
 const ConsultationModal = ({ children }: ConsultationModalProps) => {
   const [open, setFormOpen] = useState(false);
   const [openDate, setOpen] = useState(false);
   const [date, setDate] = useState<Date | undefined>(undefined);
   const [time, setTime] = useState('10:30');
-  const [isSubmitting, setIsSubmitting] = useState(false);
+
+  const whatsappNumber = process.env.NEXT_PUBLIC_WHATSAPP_NO!; // Replace with your WhatsApp number
+
+  const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
 
   const [formData, setFormData] = useState({
     name: '',
@@ -31,41 +53,53 @@ const ConsultationModal = ({ children }: ConsultationModalProps) => {
     description: ''
   });
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setIsSubmitting(true);
+  const getCaseTypeName = (type: string) => {
+    const types: { [key: string]: string } = {
+      criminal: 'Criminal Defense',
+      'personal-injury': 'Personal Injury',
+      family: 'Family Law',
+      business: 'Business Law',
+      estate: 'Estate Planning',
+      load: 'Loan',
+      investment: 'Investment'
+    };
+    return types[type] || type;
+  };
 
-    // Basic validation
-    if (!formData.name || !formData.email || !formData.phone || !formData.caseType) {
-      toast.error('Please fill in all required fields');
-      setIsSubmitting(false);
-      return;
-    }
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    setFieldErrors({});
 
     try {
-      const emailData = {
+      // Validate form data
+      const validationData = {
         ...formData,
-        preferredDate: date ? date.toLocaleDateString() : '',
+        preferredDate: date,
         preferredTime: time
       };
 
-      const response = await fetch('/api/send-consultation-email', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify(emailData)
-      });
+      const validated = consultationSchema.parse(validationData);
 
-      const responseData = await response.json(); // Add this line to get the response body
+      // Create WhatsApp message
+      const message = `*New Consultation Request, we get in-touch with you shortly*
 
-      if (!response.ok) {
-        console.error('API Error Response:', responseData); // Log detailed error
-        throw new Error(responseData.message || 'Failed to send consultation request');
-      }
+*Name:* ${validated.name}
+*Email:* ${validated.email}
+*Phone:* ${validated.phone}
+*Case Type:* ${getCaseTypeName(validated.caseType)}
+*Description:* ${validated.description || 'N/A'}
+*Preferred Date:* ${validated.preferredDate ? validated.preferredDate.toLocaleDateString() : 'N/A'}
+*Preferred Time:* ${validated.preferredTime}`;
 
-      toast.success('Consultation Request Submitted', {
-        description: <span style={{ color: 'black' }}>We&apos;ll contact you back soon to schedule your consultation.</span>
+      // Encode message for URL
+      const encodedMessage = encodeURIComponent(message);
+      const whatsappUrl = `https://wa.me/${whatsappNumber.replace(/\D/g, '')}?text=${encodedMessage}`;
+
+      // Open WhatsApp
+      window.open(whatsappUrl, '_blank');
+
+      toast.success('Opening WhatsApp', {
+        description: <span style={{ color: 'black' }}>Your consultation request is ready to send.</span>
       });
 
       // Reset form and close modal
@@ -80,15 +114,34 @@ const ConsultationModal = ({ children }: ConsultationModalProps) => {
       setTime('10:30');
       setFormOpen(false);
     } catch (error) {
-      console.error('Error sending consultation request:', error);
-      toast.error(error instanceof Error ? error.message : 'Failed to submit consultation request. Please try again.');
-    } finally {
-      setIsSubmitting(false);
+      if (error instanceof z.ZodError) {
+        // Handle validation errors
+        const errors: Record<string, string> = {};
+        error.issues.forEach(issue => {
+          const path = issue.path[0];
+          if (path) {
+            errors[path as string] = issue.message;
+          }
+        });
+        setFieldErrors(errors);
+        toast.error('Please fix the errors in the form');
+      }
     }
   };
 
   const handleInputChange = (field: string, value: string) => {
     setFormData(prev => ({ ...prev, [field]: value }));
+    // Clear error for this field when user starts typing
+    if (fieldErrors[field]) {
+      setFieldErrors(prev => ({ ...prev, [field]: '' }));
+    }
+  };
+
+  // Disable past dates
+  const disabledDays = (date: Date) => {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    return date <= today;
   };
 
   return (
@@ -119,7 +172,15 @@ const ConsultationModal = ({ children }: ConsultationModalProps) => {
                     <User className="w-4 h-4" />
                     Full Name *
                   </Label>
-                  <Input id="name" value={formData.name} onChange={e => handleInputChange('name', e.target.value)} placeholder="Enter your full name" required />
+                  <Input
+                    id="name"
+                    value={formData.name}
+                    onChange={e => handleInputChange('name', e.target.value)}
+                    placeholder="Enter your full name"
+                    required
+                    className={fieldErrors.name ? 'border-red-500' : ''}
+                  />
+                  {fieldErrors.name && <p className="text-sm text-red-500">{fieldErrors.name}</p>}
                 </div>
 
                 <div className="space-y-2">
@@ -127,7 +188,16 @@ const ConsultationModal = ({ children }: ConsultationModalProps) => {
                     <Mail className="w-4 h-4" />
                     Email Address *
                   </Label>
-                  <Input id="email" type="email" value={formData.email} onChange={e => handleInputChange('email', e.target.value)} placeholder="Enter your email address" required />
+                  <Input
+                    id="email"
+                    type="email"
+                    value={formData.email}
+                    onChange={e => handleInputChange('email', e.target.value)}
+                    placeholder="Enter your email address"
+                    required
+                    className={fieldErrors.email ? 'border-red-500' : ''}
+                  />
+                  {fieldErrors.email && <p className="text-sm text-red-500">{fieldErrors.email}</p>}
                 </div>
 
                 <div className="space-y-2">
@@ -135,7 +205,16 @@ const ConsultationModal = ({ children }: ConsultationModalProps) => {
                     <Phone className="w-4 h-4" />
                     Phone Number *
                   </Label>
-                  <Input id="phone" type="tel" value={formData.phone} onChange={e => handleInputChange('phone', e.target.value)} placeholder="Enter your phone number" required />
+                  <Input
+                    id="phone"
+                    type="tel"
+                    value={formData.phone}
+                    onChange={e => handleInputChange('phone', e.target.value)}
+                    placeholder="Enter your phone number"
+                    required
+                    className={fieldErrors.phone ? 'border-red-500' : ''}
+                  />
+                  {fieldErrors.phone && <p className="text-sm text-red-500">{fieldErrors.phone}</p>}
                 </div>
               </div>
 
@@ -146,7 +225,7 @@ const ConsultationModal = ({ children }: ConsultationModalProps) => {
                 <div className="space-y-2 w-full">
                   <Label htmlFor="caseType">Case Type *</Label>
                   <Select value={formData.caseType} onValueChange={value => handleInputChange('caseType', value)}>
-                    <SelectTrigger>
+                    <SelectTrigger className={fieldErrors.caseType ? 'border-red-500' : ''}>
                       <SelectValue placeholder="Select the type of legal matter" />
                     </SelectTrigger>
                     <SelectContent className="w-full">
@@ -159,6 +238,7 @@ const ConsultationModal = ({ children }: ConsultationModalProps) => {
                       <SelectItem value="investment">Investment</SelectItem>
                     </SelectContent>
                   </Select>
+                  {fieldErrors.caseType && <p className="text-sm text-red-500">{fieldErrors.caseType}</p>}
                 </div>
 
                 <div className="space-y-2">
@@ -169,14 +249,16 @@ const ConsultationModal = ({ children }: ConsultationModalProps) => {
                     onChange={e => handleInputChange('description', e.target.value)}
                     placeholder="Briefly describe your legal matter..."
                     rows={4}
+                    className={fieldErrors.description ? 'border-red-500' : ''}
                   />
+                  {fieldErrors.description && <p className="text-sm text-red-500">{fieldErrors.description}</p>}
                 </div>
 
                 <div className="flex flex-col space-y-2">
                   <Label htmlFor="preferredDate">Preferred Consultation Date</Label>
                   <Popover open={openDate} onOpenChange={setOpen}>
                     <PopoverTrigger asChild>
-                      <Button variant="outline" id="date-picker" className="w-32 justify-between font-normal">
+                      <Button variant="outline" id="date-picker" className={`w-32 justify-between font-normal ${fieldErrors.preferredDate ? 'border-red-500' : ''}`}>
                         {date ? date.toLocaleDateString() : 'Select date'}
                         <ChevronDownIcon />
                       </Button>
@@ -189,10 +271,16 @@ const ConsultationModal = ({ children }: ConsultationModalProps) => {
                         onSelect={date => {
                           setDate(date);
                           setOpen(false);
+                          // Clear error when user selects a date
+                          if (fieldErrors.preferredDate) {
+                            setFieldErrors(prev => ({ ...prev, preferredDate: '' }));
+                          }
                         }}
+                        disabled={disabledDays}
                       />
                     </PopoverContent>
                   </Popover>
+                  {fieldErrors.preferredDate && <p className="text-sm text-red-500">{fieldErrors.preferredDate}</p>}
                 </div>
 
                 <div className="space-y-2">
@@ -202,17 +290,20 @@ const ConsultationModal = ({ children }: ConsultationModalProps) => {
                     id="time-picker"
                     value={time}
                     onChange={e => setTime(e.target.value)}
-                    className="bg-background appearance-none [&::-webkit-calendar-picker-indicator]:hidden [&::-webkit-calendar-picker-indicator]:appearance-none"
+                    className={`bg-background appearance-none [&::-webkit-calendar-picker-indicator]:hidden [&::-webkit-calendar-picker-indicator]:appearance-none ${
+                      fieldErrors.preferredTime ? 'border-red-500' : ''
+                    }`}
                   />
+                  {fieldErrors.preferredTime && <p className="text-sm text-red-500">{fieldErrors.preferredTime}</p>}
                 </div>
               </div>
 
               <div className="flex gap-3 pt-4">
-                <Button type="button" variant="outline" onClick={() => setFormOpen(false)} className="flex-1" disabled={isSubmitting}>
+                <Button type="button" variant="outline" onClick={() => setFormOpen(false)} className="flex-1">
                   Cancel
                 </Button>
-                <Button type="submit" className="flex-1 text-white font-semibold" disabled={isSubmitting}>
-                  {isSubmitting ? 'Sending...' : 'Submit Request'}
+                <Button type="submit" className="flex-1 text-white font-semibold">
+                  Send via WhatsApp
                 </Button>
               </div>
             </form>

@@ -1,7 +1,6 @@
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Scale, Award, Users, BookOpen } from "lucide-react";
-import attorneyProfile from "../assets/attorney-profile.jpg";
 import Image from "next/image";
 
 const AboutSection = () => {
@@ -25,10 +24,11 @@ const AboutSection = () => {
         <div className="grid lg:grid-cols-1 gap-12 items-center">
           <div className="max-w-6xl mx-auto">
             <div className="grid md:grid-cols-2 gap-12 items-center">
-              <div>
+              <div className="relative h-[350px] md:h-[500px]">
                 <Image
-                  src=""
+                  src="https://i.imgur.com/Sr0VR0K.jpeg"
                   alt="M. John Abraham , Attorney"
+                  fill
                   className="rounded-lg shadow-lg w-full max-w-md mx-auto"
                 />
               </div>
